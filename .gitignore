@@ -1,0 +1,57 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.whl
+MANIFEST
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+venv/
+myenv/
+env/
+.env/
+.venv/
+ENV/
+
+# ── IDE / Editor ──────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.suo
+*.user
+*.sln
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── GestureOS specific ────────────────────────────────────────────────────────
+# MediaPipe model (downloaded automatically on first run)
+assets/hand_landmarker.task
+assets/*.task
+assets/*.tflite
+
+# Log files
+gestureos.log
+*.log
+
+# PyInstaller output
+dist/
+build/
+*.spec
+
+# Secrets / API keys (never commit these)
+.env
+secrets.py
+config/secrets.py
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Desktop.ini
+$RECYCLE.BIN/

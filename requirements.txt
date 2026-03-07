@@ -1,0 +1,23 @@
+# GestureOS — Python dependencies
+# Install: pip install -r requirements.txt
+#
+# pyaudio on Windows:
+#   pip install pipwin && pipwin install pyaudio
+#
+# If pipwin fails:
+#   Download wheel from https://www.lfd.uci.edu/~gohlke/pythonlibs/#pyaudio
+#   pip install PyAudio‑0.2.11‑cpXX‑cpXX‑win_amd64.whl
+
+opencv-python>=4.8.0
+mediapipe>=0.10.0
+numpy>=1.24.0
+pyautogui>=0.9.54
+pywin32>=306
+psutil>=5.9.0
+pystray>=0.19.4
+Pillow>=10.0.0
+SpeechRecognition>=3.10.0
+openai>=1.0.0
+
+# pyaudio — install separately (see above)
+# pyaudio
