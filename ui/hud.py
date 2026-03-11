@@ -23,6 +23,7 @@ class HUD:
         self._gesture          = ""
         self._root             = None
         self._gesture_clear_job = None
+        self._cam_toggle_fn     = None   # set by main.py via set_cam_toggle()
 
     # ── public thread-safe API ────────────────────────────────────────────────
 

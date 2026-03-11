@@ -1,8 +1,8 @@
-"""core/pipeline.py — Main processing loop with direct cv2 preview."""
+"""core/pipeline.py — Main processing loop with togglable cv2 preview."""
 import time, threading, logging, cv2
 logger = logging.getLogger(__name__)
 
-WIN = "AIROS — Camera Preview  (H hide | Q quit)"
+WIN = "AIROS — Camera Preview  [H=hide]"
 
 
 class Pipeline:
@@ -11,7 +11,7 @@ class Pipeline:
         self.cfg         = cfg
         self._stop_ev    = threading.Event()
         self.voice       = None
-        self._cam_win    = camera_window      # just used for .visible flag
+        self._cam_win    = camera_window   # CameraWindow — only .visible is read
 
         self._on_status  = on_status  or (lambda s: None)
         self._on_gesture = on_gesture or (lambda g, c: None)
@@ -53,7 +53,7 @@ class Pipeline:
         logger.info("Pipeline running.")
         prev_status = prev_ctx = None
         frame_times = []
-        win_open    = False
+        win_alive   = False    # track whether cv2 window is currently open
 
         for frame in self.camera.frames():
             if self._stop_ev.is_set():
@@ -93,49 +93,87 @@ class Pipeline:
             frame_times = [t for t in frame_times if frame_times[-1] - t < 1.0]
             fps = len(frame_times)
 
-            # top bar
             h, w = frame.shape[:2]
+
+            # top bar
             cv2.rectangle(frame, (0, 0), (w, 36), (10, 15, 22), -1)
             scol = {"active": (0,255,136), "idle": (0,204,255), "lost": (60,60,255)}.get(status, (60,60,255))
             slbl = {"active": "● TRACKING", "idle": "● IDLE", "lost": "● NO HAND"}.get(status, "●")
-            cv2.putText(frame, slbl,        (12, 24),   cv2.FONT_HERSHEY_SIMPLEX, 0.62, scol,        2, cv2.LINE_AA)
-            cv2.putText(frame, "AIROS",     (w//2-32, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.62, (40,80,60), 1, cv2.LINE_AA)
-            cv2.putText(frame, f"{fps} FPS",(w-90, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.58, (80,120,100),1, cv2.LINE_AA)
+            cv2.putText(frame, slbl,        (12, 24),      cv2.FONT_HERSHEY_SIMPLEX, 0.62, scol,         2, cv2.LINE_AA)
+            cv2.putText(frame, "AIROS",     (w//2-32, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.62, (40, 80, 60), 1, cv2.LINE_AA)
+            cv2.putText(frame, f"{fps} FPS",(w-90, 24),    cv2.FONT_HERSHEY_SIMPLEX, 0.58, (80,120,100), 1, cv2.LINE_AA)
 
-            # bottom gesture bar
+            # bottom gesture label
             if gesture and gesture not in ("cursor_move", "idle"):
                 label = gesture.replace("_", " ").upper()
-                cv2.rectangle(frame, (0, h-52), (w, h), (8,12,18), -1)
-                cv2.rectangle(frame, (0, h-52), (5, h), (0,255,136), -1)
+                cv2.rectangle(frame, (0, h-52), (w, h), (8, 12, 18), -1)
+                cv2.rectangle(frame, (0, h-52), (5, h), (0, 255, 136), -1)
                 cv2.putText(frame, label, (14, h-16),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,136), 2, cv2.LINE_AA)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 136), 2, cv2.LINE_AA)
 
-            # ── cv2 preview — same thread, always works ───────────────────────
-            show = (self._cam_win is None or self._cam_win.visible) and not self.cfg.NO_PREVIEW
-            if show:
+            # ── preview window logic ──────────────────────────────────────────
+            want_visible = (
+                not self.cfg.NO_PREVIEW and
+                (self._cam_win is None or self._cam_win.visible)
+            )
+
+            if want_visible:
                 cv2.imshow(WIN, frame)
-                win_open = True
+                win_alive = True
+
                 key = cv2.waitKey(1) & 0xFF
-                if key in (ord('q'), ord('Q')):
-                    break
-                elif key in (ord('h'), ord('H')):
-                    if self._cam_win:
-                        self._cam_win.hide()
+
+                # H = hide preview (pipeline keeps running)
+                if key in (ord('h'), ord('H')):
                     cv2.destroyWindow(WIN)
-                    win_open = False
-            elif win_open:
-                cv2.destroyWindow(WIN)
-                win_open = False
+                    win_alive = False
+                    if self._cam_win:
+                        self._cam_win.visible = False
+                    logger.info("Preview hidden — click 📷 in HUD to reopen")
+
+                # Q = also just hide, NOT stop pipeline
+                elif key in (ord('q'), ord('Q')):
+                    cv2.destroyWindow(WIN)
+                    win_alive = False
+                    if self._cam_win:
+                        self._cam_win.visible = False
+                    logger.info("Preview closed — click 📷 in HUD to reopen")
+
+                else:
+                    # Check if user clicked the window's X button
+                    try:
+                        prop = cv2.getWindowProperty(WIN, cv2.WND_PROP_VISIBLE)
+                        if prop < 1:
+                            # X was clicked — hide but keep pipeline running
+                            win_alive = False
+                            if self._cam_win:
+                                self._cam_win.visible = False
+                            logger.info("Preview closed via X — click 📷 in HUD to reopen")
+                    except Exception:
+                        pass
+
+            else:
+                # Preview is hidden — destroy window if it was open
+                if win_alive:
+                    try:
+                        cv2.destroyWindow(WIN)
+                    except Exception:
+                        pass
+                    win_alive = False
+                # Still need waitKey to process OpenCV events even with no window
+                cv2.waitKey(1)
 
             # ── timing ────────────────────────────────────────────────────────
             elapsed = time.perf_counter() - t0
-            wait    = max(0, 1/self.cfg.TARGET_FPS - elapsed)
+            wait    = max(0, 1 / self.cfg.TARGET_FPS - elapsed)
             if wait > 0:
                 time.sleep(wait)
 
+        # cleanup
         self.camera.release()
         self.tracker.close()
-        cv2.destroyAllWindows()
+        if win_alive:
+            cv2.destroyAllWindows()
         logger.info("Pipeline stopped.")
 
     def stop(self):

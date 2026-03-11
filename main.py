@@ -23,8 +23,7 @@ def parse_args():
     p.add_argument("--sensitivity", type=float, default=1.2)
     p.add_argument("--corner",      default="bottom-right",
                    choices=["top-left","top-right","bottom-left","bottom-right"])
-    p.add_argument("--no-preview",  action="store_true",
-                   help="Hide camera preview window")
+    p.add_argument("--no-preview",  action="store_true")
     return p.parse_args()
 
 
@@ -49,12 +48,24 @@ def main():
     pipeline = None
     cam_win  = CameraWindow(cfg)
 
+    # Start with preview visible unless --no-preview
+    cam_win.visible = not args.no_preview
+
     sidebar = Sidebar(cfg, on_voice_command=lambda text: (
         pipeline.voice._handle(text) if pipeline and pipeline.voice else None
     ))
 
     hud = HUD(cfg, on_toggle_sidebar=sidebar.toggle)
 
+    # ── wire 📷 button in HUD to toggle cam_win.visible ───────────────────────
+    def toggle_preview():
+        cam_win.visible = not cam_win.visible
+        state = "shown" if cam_win.visible else "hidden"
+        logger.info(f"Camera preview {state}")
+
+    hud.set_cam_toggle(toggle_preview)
+
+    # ── callbacks ─────────────────────────────────────────────────────────────
     def on_status(s):
         hud.update_status(s)
         sidebar.update_status(s)
@@ -62,8 +73,8 @@ def main():
     def on_gesture(g, ctx):
         hud.update_gesture(g, ctx)
 
-    def on_chat(u, r):    sidebar.add_chat(u, r)
-    def on_context(ctx):  sidebar.update_context(ctx)
+    def on_chat(u, r):   sidebar.add_chat(u, r)
+    def on_context(ctx): sidebar.update_context(ctx)
 
     _pipe_thread = None
 
@@ -78,11 +89,10 @@ def main():
             on_chat=on_chat,     on_context=on_context,
             camera_window=cam_win,
         )
-        # Pipeline.run() calls cv2.imshow directly — run in background thread
         _pipe_thread = threading.Thread(target=pipeline.run,
                                         daemon=True, name="Pipeline")
         _pipe_thread.start()
-        logger.info("Pipeline started — camera window opening...")
+        logger.info("Pipeline started.")
 
     def stop_pipeline():
         nonlocal pipeline
@@ -101,19 +111,18 @@ def main():
     tray = TrayIcon(
         on_start=start_pipeline, on_stop=stop_pipeline,
         on_toggle_sidebar=sidebar.toggle, on_quit=quit_all,
+        on_toggle_preview=toggle_preview,
     )
 
     threading.Thread(target=tray.run,    daemon=True, name="Tray").start()
     threading.Thread(target=sidebar.run, daemon=True, name="Sidebar").start()
 
-    # Start immediately
     start_pipeline()
 
     logger.info("AIROS running.")
-    logger.info("  Preview keys: H = hide window  |  Q = close preview")
+    logger.info("  Camera preview: H/Q/X = hide  |  click 📷 in HUD to reopen")
 
-    # HUD must run on main thread (tkinter)
-    hud.run()
+    hud.run()   # blocks — tkinter must be on main thread
 
 
 if __name__ == "__main__":
