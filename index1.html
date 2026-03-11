@@ -5,45 +5,68 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>AIROS — Control Your Computer With Your Hand</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet"/>
-<script>
-// Load MediaPipe with CDN fallback chain
+<script type="module">
+import { FilesetResolver, HandLandmarker } from
+"https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.js";
+
+window.HandLandmarker = HandLandmarker;
+window.FilesetResolver = FilesetResolver;
+
+window._wasmBase =
+"https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm";
+
+console.log("MediaPipe module loaded");
+
+// Simplified MediaPipe Loader
 window._mpLoaded = false;
-function _loadScript(url, cb, errCb) {
-  var s = document.createElement('script');
-  s.src = url; s.async = false;
-  s.onload = function(){ cb(); };
-  s.onerror = function(){ errCb(); }; 
-  document.head.appendChild(s);
+const MP_VERSION = "latest";
+
+function _loadScript(url) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = url;
+    s.type = "module";
+    s.async = false;
+    s.crossOrigin = "anonymous"; // CRITICAL FOR GITHUB PAGES
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
 }
-var _cdns = [
-  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.js',
-  'https://unpkg.com/@mediapipe/tasks-vision@0.10.14/vision_bundle.js',
-  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.js',
-  'https://unpkg.com/@mediapipe/tasks-vision@0.10.3/vision_bundle.js'
-];
-var _wasm_bases = [
-  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm',
-  'https://unpkg.com/@mediapipe/tasks-vision@0.10.14/wasm',
-  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm',
-  'https://unpkg.com/@mediapipe/tasks-vision@0.10.3/wasm'
-];
-var _cdnIdx = 0;
-window._wasmBase = _wasm_bases[0];
-function _tryNextCDN() {
-  if (_cdnIdx >= _cdns.length) {
-    window._mpError = true;
-    console.error('All MediaPipe CDNs failed');
-    document.getElementById('cdn-err').style.display='block';
-    return;
+
+// Global WASM path for the HandLandmarker
+window._wasmBase = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm`;
+
+async function initMediaPipe(){
+  try {
+
+    const vision = await import(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.js"
+    );
+
+    const { FilesetResolver, HandLandmarker } = vision;
+
+    const resolver = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+    );
+
+    const handLandmarker = await HandLandmarker.createFromOptions(resolver,{
+      baseOptions:{
+        modelAssetPath:
+        "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
+      },
+      runningMode:"VIDEO",
+      numHands:1
+    });
+
+    console.log("MediaPipe Loaded Successfully");
+
+  } catch(e){
+    console.error("MediaPipe CDN failed",e);
   }
-  window._wasmBase = _wasm_bases[_cdnIdx];
-  _loadScript(_cdns[_cdnIdx],
-    function(){ window._mpLoaded = true; console.log('MediaPipe OK:', _cdns[_cdnIdx-1]||_cdns[0]); },
-    function(){ console.warn('CDN failed:', _cdns[_cdnIdx]); _cdnIdx++; _tryNextCDN(); }
-  );
-  _cdnIdx++;
 }
-_tryNextCDN();
+
+initMediaPipe();
 </script>
 <style>
 :root{--bg:#060a0f;--bg2:#0d1520;--bg3:#111c2a;--acc:#00ff88;--acc2:#00cfff;--warn:#ffcc00;--dng:#ff4d4d;--purp:#cc44ff;--txt:#c9d8e8;--muted:#4a6070;--bdr:#1a2a38}
@@ -482,29 +505,47 @@ function resetFab(){const f=document.getElementById('fab');f.textContent='📷 E
 function showErr(msg){setStatus(msg);document.getElementById('startOv').classList.remove('gone');resetFab();}
 
 async function loadHL(){
-  const lbar=document.getElementById('lbar'),lfill=document.getElementById('lfill');
-  lbar.classList.add('show'); lfill.style.width='10%';
-  setStatus('Loading model (8 MB)...');
-  // Wait for MediaPipe CDN bundle to finish loading
-  let tries=0;
-  while(typeof window.HandLandmarker==='undefined' && tries<50){
-    await new Promise(r=>setTimeout(r,200)); tries++;
+
+  const lbar=document.getElementById('lbar')
+  const lfill=document.getElementById('lfill')
+
+  lbar.classList.add('show')
+  lfill.style.width='20%'
+
+  setStatus('Loading MediaPipe...')
+
+  if(!window.HandLandmarker){
+    throw new Error("MediaPipe module not loaded")
   }
-  if(typeof window.HandLandmarker==='undefined'){
-    throw new Error('MediaPipe CDN failed — open browser console (F12) to see details, or try Chrome/Edge on a stable internet connection');
-  }
-  lfill.style.width='40%';
-  const vision=await window.FilesetResolver.forVisionTasks(window._wasmBase);
-  lfill.style.width='70%';
-  hl=await window.HandLandmarker.createFromOptions(vision,{
-    baseOptions:{
-      modelAssetPath:'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
-      delegate:'GPU'  // auto-falls back to CPU if GPU unavailable
-    },
-    runningMode:'VIDEO', numHands:1
-  });
-  lfill.style.width='100%'; hlReady=true;
-  setTimeout(()=>{lbar.classList.remove('show');lfill.style.width='0%'},600);
+
+  const vision = await window.FilesetResolver.forVisionTasks(
+    window._wasmBase
+  )
+
+  lfill.style.width='60%'
+
+  hl = await window.HandLandmarker.createFromOptions(
+    vision,
+    {
+      baseOptions:{
+        modelAssetPath:
+        "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
+      },
+      runningMode:"VIDEO",
+      numHands:1
+    }
+  )
+
+  lfill.style.width='100%'
+
+  hlReady=true
+
+  setTimeout(()=>{
+    lbar.classList.remove('show')
+    lfill.style.width='0%'
+  },600)
+
+  setStatus("Model ready")
 }
 
 async function toggleCam(){
