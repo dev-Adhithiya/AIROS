@@ -35,7 +35,7 @@ in any application.
 - 🖱️ **Full mouse control** — move, left/right click, double-click, drag, scroll
 - 👋 **10 built-in gestures** — all mapped to real OS actions
 - 🧠 **Context-aware** — swipe behaves differently in Chrome vs PowerPoint vs Spotify
-- 🎙️ **Voice commands** — 25+ built-in commands, OpenAI fallback for anything else
+- 🎙️ **Voice commands** — 25+ built-in commands, Gemini fallback for anything else
 - 💤 **Smart idle** — auto-sleeps when hand leaves frame, wakes on open palm
 - ⚡ **Low latency** — Win32 `SendInput` directly, EMA cursor smoothing
 - 🪟 **Minimal UI** — tiny corner HUD + slide-in sidebar, no taskbar clutter
@@ -135,20 +135,20 @@ Say these out loud — recognised automatically via microphone:
 
 **Editing:** `"Copy"` · `"Paste"` · `"Undo"` · `"Save"` · `"Select all"`
 
-**AI chat:** anything else → sent to OpenAI GPT (requires API key)
+**AI chat:** anything else → sent to Gemini AI (requires API key)
 
 ---
 
 ## AI Assistant Setup (Optional)
 
-Set your OpenAI API key:
+Set your Gemini API key:
 
 ```bash
 # Option 1: environment variable (recommended)
-set OPENAI_API_KEY=sk-...
+set GEMINI_API_KEY=AIza...
 
 # Option 2: edit config/settings.py
-OPENAI_API_KEY = "sk-..."
+GEMINI_API_KEY = "AIza..."
 ```
 
 ---
@@ -203,7 +203,7 @@ gestureos/
 │   ├── sidebar.py            # Slide-in panel (context + AI chat)
 │   └── tray.py               # System tray icon
 ├── ai/
-│   └── voice_assistant.py    # Speech recognition + OpenAI
+│   └── voice_assistant.py    # Speech recognition + Gemini
 └── assets/
     └── hand_landmarker.task  # Auto-downloaded on first run
 ```

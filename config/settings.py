@@ -46,8 +46,8 @@ class Settings:
     # Voice / AI
     VOICE_ENABLED:          bool  = True
     VOICE_LANGUAGE:         str   = "en-US"
-    OPENAI_API_KEY:         str   = ""      # or set env OPENAI_API_KEY
-    OPENAI_MODEL:           str   = "gpt-3.5-turbo"
+    GEMINI_API_KEY:         str   = ""      # or set env GEMINI_API_KEY
+    GEMINI_MODEL:           str   = "gemini-1.5-flash"  # fast + free tier
 
     # HUD / sidebar
     HUD_CORNER:             str   = "bottom-right"   # top-left / top-right / bottom-left / bottom-right
