@@ -1,241 +1,112 @@
-<div align="center">
+# AIROS — AI-Powered Hand Gesture OS Controller
 
-# 🖐️ GestureOS
-
-**Control your entire Windows computer with hand gestures — no extra hardware.**
-
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)](https://python.org)
-[![MediaPipe](https://img.shields.io/badge/MediaPipe-0.10.x-orange?logo=google)](https://mediapipe.dev)
-[![OpenCV](https://img.shields.io/badge/OpenCV-4.8%2B-green?logo=opencv)](https://opencv.org)
-[![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11-lightblue?logo=windows)](https://microsoft.com/windows)
-[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
-
-*A Natural User Interface (NUI) — your hand IS the mouse.*
-
-</div>
-
----
-
-## How It Works
-
-```
-Webcam  →  MediaPipe Landmarks  →  Gesture Engine  →  Win32 SendInput  →  OS
-```
-
-GestureOS runs silently in the background and translates hand gestures into real
-mouse movements, clicks, scrolls, hotkeys, and voice commands — system-wide,
-in any application.
-
-**No extra hardware. Just your laptop webcam.**
-
----
+Control your computer entirely with hand gestures detected through your webcam. No extra hardware needed.
 
 ## Features
-
-- 🖱️ **Full mouse control** — move, left/right click, double-click, drag, scroll
-- 👋 **10 built-in gestures** — all mapped to real OS actions
-- 🧠 **Context-aware** — swipe behaves differently in Chrome vs PowerPoint vs Spotify
-- 🎙️ **Voice commands** — 25+ built-in commands, Gemini fallback for anything else
-- 💤 **Smart idle** — auto-sleeps when hand leaves frame, wakes on open palm
-- ⚡ **Low latency** — Win32 `SendInput` directly, EMA cursor smoothing
-- 🪟 **Minimal UI** — tiny corner HUD + slide-in sidebar, no taskbar clutter
-- 📦 **Single `.exe`** — build with PyInstaller for one-click launch
-
----
-
-## Gesture Reference
-
-| Hand Shape | Gesture | Action |
-|:---:|---|---|
-| ☝️ | Index finger up | **Move cursor** |
-| 👌 | Thumb meets index tip | **Left click** |
-| 👌👌 | Two quick pinches | **Double click** |
-| 🤏 | Thumb meets middle tip | **Right click** |
-| ✌️↕ | Two fingers up + vertical motion | **Scroll up / down** |
-| 👋→ | Open hand, fast rightward motion | **Swipe right** |
-| 👋← | Open hand, fast leftward motion | **Swipe left** |
-| ✊ | All fingers closed | **Start drag** |
-| 🖐️ | All five fingers extended | **Release drag / wake** |
-| 🤏 | Thumb + index only, close together | **Pinch** |
-
----
-
-## Context-Aware Gestures
-
-Gestures adapt automatically to the active app:
-
-| App | Swipe Right | Swipe Left | Open Palm |
-|-----|-------------|------------|-----------|
-| Chrome / Edge / Firefox | Forward | Back | Focus URL bar |
-| PowerPoint | Next slide | Previous slide | Start slideshow |
-| VS Code | Next tab | Previous tab | Command palette |
-| Spotify | Next track | Previous track | Play / pause |
-| VLC | Seek forward | Seek back | Play / pause |
-| Teams | — | — | Mute toggle |
-
----
+- 🖱️ Full mouse control (move, click, right-click, double-click, scroll, drag)
+- 🧠 Context-aware gestures (Chrome, PowerPoint, Spotify, VS Code, etc.)
+- 🎙️ Voice commands + Gemini AI assistant
+- ⚡ Under 30ms latency via Win32 SendInput
+- 📷 Works with any webcam including low-res
 
 ## Quick Start
 
-### 1. Clone
 ```bash
-git clone https://github.com/YOUR_USERNAME/gestureos.git
-cd gestureos
-```
-
-### 2. Create virtual environment
-```bash
+git clone https://github.com/dev-Adhithiya/AIROS.git
+cd AIROS
 python -m venv myenv
 myenv\Scripts\activate
-```
-
-### 3. Install dependencies
-```bash
 pip install -r requirements.txt
-```
-
-> **Voice support** (microphone) requires PyAudio:
-> ```bash
-> pip install pipwin
-> pipwin install pyaudio
-> ```
-
-### 4. Run
-```bash
 python main.py
 ```
 
-On first run, the MediaPipe hand model (~8 MB) downloads automatically into `assets/`.
-
----
+## Requirements
+- Windows 10 / 11
+- Python 3.9 – 3.12
+- Any webcam
 
 ## Usage
-
 ```bash
-python main.py                    # Normal run
-python main.py --demo             # No real mouse output (safe testing)
-python main.py --no-voice         # Disable microphone
-python main.py --debug            # Show camera feed + FPS overlay
-python main.py --camera 1         # Use second camera
-python main.py --sensitivity 1.5  # Faster cursor
-python main.py --corner top-left  # HUD position
+python main.py                 # normal run
+python main.py --demo          # safe test mode (no real mouse)
+python main.py --no-voice      # disable microphone
+python main.py --camera 1      # use second webcam
+python main.py --debug         # show FPS + debug logs
+python main.py --no-preview    # hide camera preview window
 ```
 
----
+## Gestures
+| Gesture | Shape | Action |
+|---------|-------|--------|
+| Move Cursor | ☝️ Index finger only | Moves mouse cursor |
+| Left Click | 👌 Thumb + index pinch | Left click |
+| Double Click | 👌👌 Two quick pinches | Double click |
+| Right Click | 🤙 Pinky only up | Right click |
+| Scroll | ✌️ Index+middle, move up/down | Scroll page |
+| Swipe | 👋 3+ fingers, fast horizontal | Navigate |
+| Grab | ✊ All fingers closed | Drag |
+| Open Palm | 🖐️ All 5 fingers spread | Release / Wake |
 
-## Voice Commands
-
-Say these out loud — recognised automatically via microphone:
-
-**Launch apps:** `"Open Chrome"` · `"Open Spotify"` · `"Open VS Code"` · `"Open Terminal"`
-
-**System:** `"Take a screenshot"` · `"Volume up/down"` · `"Mute"` · `"Lock screen"`
-
-**Window:** `"Close window"` · `"Minimize"` · `"Maximize"` · `"Show desktop"`
-
-**Editing:** `"Copy"` · `"Paste"` · `"Undo"` · `"Save"` · `"Select all"`
-
-**AI chat:** anything else → sent to Gemini AI (requires API key)
-
----
-
-## AI Assistant Setup (Optional)
-
-Set your Gemini API key:
-
+## Optional: Gemini AI Voice
+Get a free key at https://aistudio.google.com/app/apikey then:
 ```bash
-# Option 1: environment variable (recommended)
-set GEMINI_API_KEY=AIza...
+set GEMINI_API_KEY=YOUR_KEY_HERE
+python main.py
+```
+Or edit `config/settings.py` and set `GEMINI_API_KEY = "your_key"`.
 
-# Option 2: edit config/settings.py
-GEMINI_API_KEY = "AIza..."
+## Optional: Voice Support (pyaudio)
+```bash
+pip install pipwin
+pipwin install pyaudio
 ```
 
----
-
-## Build Standalone .exe
-
+## Building .exe
 ```bash
 pip install pyinstaller
-python build.py
-# → dist/GestureOS.exe
+pyinstaller GestureOS.spec
+xcopy assets dist\assets /E /I
+# Output: dist\GestureOS.exe
 ```
-
----
-
-## Configuration
-
-All settings in `config/settings.py`:
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `SENSITIVITY` | `1.2` | Cursor speed multiplier |
-| `SMOOTHING` | `0.28` | Jitter reduction (lower = smoother) |
-| `CLICK_DIST_PX` | `36` | Thumb–index distance to trigger click |
-| `SCROLL_SPEED` | `10` | Scroll lines per gesture tick |
-| `IDLE_TIMEOUT` | `2.5` | Seconds before sleep mode |
-| `HUD_CORNER` | `bottom-right` | HUD position on screen |
-| `DEMO_MODE` | `False` | Disable real mouse output |
-
----
 
 ## Project Structure
-
 ```
-gestureos/
-├── main.py                   # Entry point
-├── build.py                  # PyInstaller .exe builder
+AIROS/
+├── main.py                  # Entry point
 ├── requirements.txt
+├── GestureOS.spec           # PyInstaller build config
 ├── config/
-│   └── settings.py           # All tunable parameters
+│   └── settings.py          # All tunable parameters
 ├── core/
-│   ├── camera.py             # Threaded webcam (zero buffer lag)
-│   ├── hand_tracker.py       # MediaPipe 0.10 Tasks API wrapper
-│   ├── cursor.py             # Win32 SendInput mouse control
-│   ├── executor.py           # Executes action dicts
-│   ├── action_mapper.py      # Gesture → action + context rules
-│   ├── idle_manager.py       # Sleep/wake on hand presence
-│   └── pipeline.py           # Main processing loop
+│   ├── camera.py            # Webcam capture (threaded)
+│   ├── hand_tracker.py      # MediaPipe Tasks API
+│   ├── cursor.py            # Win32 cursor with EMA smoothing
+│   ├── executor.py          # Dispatches mouse/keyboard actions
+│   ├── action_mapper.py     # Maps gestures to actions per app
+│   ├── idle_manager.py      # Sleep/wake on hand presence
+│   └── pipeline.py          # Main processing loop
 ├── gestures/
-│   └── engine.py             # Geometric gesture recognition
+│   └── engine.py            # Gesture recognition engine
 ├── ui/
-│   ├── hud.py                # Corner indicator (always-on-top)
-│   ├── sidebar.py            # Slide-in panel (context + AI chat)
-│   └── tray.py               # System tray icon
+│   ├── hud.py               # Corner status indicator
+│   ├── sidebar.py           # Slide-in AI chat panel
+│   ├── camera_window.py     # Live webcam preview
+│   └── tray.py              # System tray icon
 ├── ai/
-│   └── voice_assistant.py    # Speech recognition + Gemini
-└── assets/
-    └── hand_landmarker.task  # Auto-downloaded on first run
+│   └── voice_assistant.py   # Gemini AI + voice commands
+├── assets/                  # Hand model downloaded here on first run
+└── website/
+    └── index.html           # Landing page with live gesture demo
 ```
 
----
-
-## Requirements
-
-- **OS:** Windows 10 / 11
-- **Python:** 3.10+
-- **Camera:** Standard webcam (720p+)
-- **GPU:** Not required
-- **CPU:** ~20–25% active, <5% idle (modern laptop)
-
----
-
-## Roadmap
-
-- [ ] Multi-hand gestures
-- [ ] Custom gesture training
-- [ ] Gesture-based virtual keyboard
-- [ ] macOS / Linux support
-- [ ] Plugin system for third-party gesture packs
-
----
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md).
-
----
+## Troubleshooting
+| Error | Fix |
+|-------|-----|
+| `No module named 'mediapipe'` | Run `myenv\Scripts\activate` first |
+| `No module named 'cv2'` | `pip install opencv-python` |
+| Camera not found | Try `--camera 1` |
+| Voice not working | `pipwin install pyaudio` |
+| Python version error | Use Python 3.9–3.12 only |
 
 ## License
-
-[MIT](LICENSE) — free to use, modify, and distribute.
+MIT — see LICENSE

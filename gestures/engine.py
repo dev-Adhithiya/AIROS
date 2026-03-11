@@ -1,26 +1,5 @@
-"""gestures/engine.py — Geometric gesture recogniser (v2).
-
-Gesture tokens:
-  cursor_move    — index finger only → move mouse
-  click          — thumb tip ↔ index tip close → left click
-  double_click   — two quick clicks
-  right_click    — PINKY finger only extended (distinct, no accidental triggers)
-  scroll_up/down — index + middle extended, move vertically
-  swipe_left/right — open hand (3+ fingers), fast wrist motion
-  grab           — all fingers closed → drag start
-  drag_end       — open palm after grab → release
-  open_palm      — all 5 fingers extended (no prior grab)
-  pinch          — thumb + index only, close together
-  peace          — index + middle held still
-  idle           — no clear gesture
-
-Cursor accuracy improvements:
-  - Dual EMA: fast EMA for responsiveness + slow EMA for stability
-  - Velocity-based smoothing: more responsive when moving fast, smoother when still
-  - Larger deadzone when nearly stationary to kill micro-jitter
-  - Confirmation buffer: clicks only fire after 2 consistent frames
-"""
-import time, collections, logging, numpy as np
+"""gestures/engine.py — Gesture recogniser, low-res camera robust."""
+import time, collections, logging
 from core.hand_tracker import (
     WRIST, THUMB_IP, THUMB_TIP,
     INDEX_MCP, INDEX_PIP, INDEX_TIP,
@@ -34,71 +13,63 @@ logger = logging.getLogger(__name__)
 class GestureEngine:
     def __init__(self, cfg):
         self.cfg = cfg
-
-        # swipe / scroll state
         self._prev_wrist_x   = None
         self._prev_scroll_y  = None
         self._scroll_smooth  = 0.0
         self._last_swipe_t   = 0.0
-
-        # click state
         self._last_click_t   = 0.0
         self._last_click_tick= 0.0
         self._click_streak   = 0
-
-        # drag state
         self._was_grabbing   = False
-
-        # gesture confirmation buffer (reduces false positives)
         self._confirm_buf    = collections.deque(maxlen=2)
-
-        # history for UI
         self._history        = collections.deque(maxlen=6)
-
-    # ── public ────────────────────────────────────────────────────────────────
 
     def recognize(self, lm):
         raw = self._raw_recognize(lm)
-        # Require gesture to appear in last 2 frames to confirm
+
         self._confirm_buf.append(raw)
+
+        # grab and cursor_move need 2 consistent frames before firing
+        # this prevents a single noisy frame from triggering grab
         if len(self._confirm_buf) == 2 and self._confirm_buf[0] == self._confirm_buf[1]:
             confirmed = raw
         else:
-            # During transition, keep cursor moving to avoid stutters
-            confirmed = raw if raw in ("cursor_move", "idle", "scroll_up",
-                                       "scroll_down", "grab") else "idle"
+            # during transition: only let smooth gestures through unconfirmed
+            confirmed = raw if raw in ("cursor_move", "idle",
+                                       "scroll_up", "scroll_down") else "idle"
+
         self._history.append(confirmed)
         return confirmed
-
-    # ── core recognition ──────────────────────────────────────────────────────
 
     def _raw_recognize(self, lm):
         now = time.perf_counter()
         ext = self._fingers_extended(lm)
-        # ext = [thumb, index, middle, ring, pinky]
         n   = sum(ext)
 
-        # ── open palm (all 5) ─────────────────────────────────────────────────
+        # ── GRAB — strict: ALL tips must be below their MCP knuckle ──────────
+        # This is the KEY fix: we don't use n==0 (which misfires on low-res)
+        # Instead explicitly check every tip is below its MCP base.
+        if self._all_closed(lm):
+            self._was_grabbing = True
+            self._upd_wrist(lm)
+            return "grab"
+
+        # ── OPEN PALM ─────────────────────────────────────────────────────────
         if n == 5:
             if self._was_grabbing:
                 self._was_grabbing = False
                 return "drag_end"
             return "open_palm"
 
-        # ── grab (all closed) ─────────────────────────────────────────────────
-        if n == 0:
-            self._was_grabbing = True
-            self._upd_wrist(lm)
-            return "grab"
+        self._was_grabbing = False
 
         # ── RIGHT CLICK: pinky only extended ─────────────────────────────────
-        # Very distinct — hard to trigger accidentally
         if ext[4] and not ext[1] and not ext[2] and not ext[3]:
             if now - self._last_click_t > self.cfg.CLICK_COOLDOWN:
                 self._last_click_t = now
                 return "right_click"
 
-        # ── LEFT CLICK: thumb tip ↔ index tip ────────────────────────────────
+        # ── LEFT CLICK: thumb tip ↔ index tip close ───────────────────────────
         d_ti = lm.dist_px(THUMB_TIP, INDEX_TIP)
         if d_ti < self.cfg.CLICK_DIST_PX:
             if now - self._last_click_t > self.cfg.CLICK_COOLDOWN:
@@ -124,13 +95,7 @@ class GestureEngine:
             if sw:
                 return sw
 
-        # ── PINCH: thumb + index only, close ─────────────────────────────────
-        if ext[0] and ext[1] and not ext[2] and not ext[3] and not ext[4]:
-            if d_ti < self.cfg.PINCH_DIST_PX:
-                self._upd_wrist(lm)
-                return "pinch"
-
-        # ── CURSOR MOVE: index only ───────────────────────────────────────────
+        # ── CURSOR MOVE: index only up, middle must be clearly down ──────────
         if ext[1] and not ext[2] and not ext[3] and not ext[4]:
             self._upd_wrist(lm)
             return "cursor_move"
@@ -138,14 +103,17 @@ class GestureEngine:
         self._upd_wrist(lm)
         return "idle"
 
-    # ── helpers ───────────────────────────────────────────────────────────────
+    # ── finger state helpers ──────────────────────────────────────────────────
 
     def _fingers_extended(self, lm):
         """
-        Returns [thumb, index, middle, ring, pinky].
-        Uses PIP joint comparison with a comfortable margin.
-        Thumb uses X-axis (mirrored webcam).
+        Returns [thumb, index, middle, ring, pinky] — True = finger is up.
+
+        Uses a SMALL margin (0.01) so low-res cameras still detect extended fingers.
+        Compares tip to PIP joint — tip must be above PIP by at least 1% of frame.
+        Thumb uses X-axis (webcam is mirrored so left hand thumb goes right).
         """
+        # Thumb: tip x must be past IP joint
         thumb = lm.norm(THUMB_TIP)[0] < lm.norm(THUMB_IP)[0] - 0.02
 
         result = [thumb]
@@ -155,9 +123,33 @@ class GestureEngine:
             (RING_TIP,  RING_PIP),
             (PINK_TIP,  PINK_PIP),
         ]:
-            # Require tip to be clearly above PIP (larger margin = fewer false positives)
-            result.append(lm.norm(tip)[1] < lm.norm(pip)[1] - 0.025)
+            # Small 0.01 margin — works on low-res cameras
+            # (was 0.025 which was too strict and caused n==0 / false grabs)
+            result.append(lm.norm(tip)[1] < lm.norm(pip)[1] - 0.01)
         return result
+
+    def _all_closed(self, lm):
+        """
+        Strict grab check: every fingertip must be BELOW or AT its MCP knuckle.
+        MCP is the big knuckle at the base of each finger.
+        This is a much higher bar than n==0 and survives low-res noise.
+        """
+        # Thumb closed: tip x past base (MCP direction)
+        thumb_closed = lm.norm(THUMB_TIP)[0] > lm.norm(INDEX_MCP)[0] - 0.02
+
+        # Each finger: tip Y must be at or below MCP Y (tip lower = closed)
+        # Allow 0.01 tolerance so nearly-closed counts
+        pairs = [
+            (INDEX_TIP, INDEX_MCP),
+            (MID_TIP,   MID_MCP),
+            (RING_TIP,  RING_MCP),
+            (PINK_TIP,  PINK_MCP),
+        ]
+        fingers_closed = all(
+            lm.norm(tip)[1] > lm.norm(mcp)[1] - 0.01
+            for tip, mcp in pairs
+        )
+        return thumb_closed and fingers_closed
 
     def _detect_scroll(self, lm):
         y = lm.norm(INDEX_TIP)[1]

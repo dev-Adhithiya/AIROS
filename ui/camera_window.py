@@ -1,205 +1,21 @@
 """
-ui/camera_window.py — Live camera preview as a tkinter Toplevel.
+ui/camera_window.py — Minimal shim.
 
-Must be created and shown from the MAIN tkinter thread (same as HUD).
-Frames are pushed from the pipeline thread via a thread-safe queue,
-then pulled and displayed using root.after() inside the main loop.
+cv2.imshow is called directly from the pipeline thread in pipeline.py.
+This class just holds the visible flag so pipeline knows whether to show.
 """
-import tkinter as tk
-import threading
-import queue
-import cv2
-import logging
-from PIL import Image, ImageTk
-
-logger = logging.getLogger(__name__)
-
-GESTURE_LABEL = {
-    "cursor_move":  "Moving Cursor",
-    "click":        "Click ✓",
-    "double_click": "Double Click ✓✓",
-    "right_click":  "Right Click",
-    "scroll_up":    "Scroll Up ↑",
-    "scroll_down":  "Scroll Down ↓",
-    "swipe_right":  "Swipe Right →",
-    "swipe_left":   "Swipe Left ←",
-    "grab":         "Grab / Drag",
-    "drag_end":     "Released",
-    "open_palm":    "Open Palm",
-    "pinch":        "Pinch",
-    "peace":        "Peace ✌",
-    "idle":         "",
-}
-
-GESTURE_COLOR = {
-    "cursor_move":  "#00ff88",
-    "click":        "#00cfff",
-    "double_click": "#00cfff",
-    "right_click":  "#ffcc00",
-    "scroll_up":    "#00ff88",
-    "scroll_down":  "#00ff88",
-    "swipe_right":  "#ff6b35",
-    "swipe_left":   "#ff6b35",
-    "grab":         "#cc44ff",
-    "drag_end":     "#00ff88",
-    "open_palm":    "#00ff88",
-    "pinch":        "#00cfff",
-    "peace":        "#00ffcc",
-    "idle":         "#444444",
-}
-
 
 class CameraWindow:
-    """
-    Toplevel window showing live annotated webcam feed.
-    Call .attach(root) from the main tkinter thread to initialise.
-    Call .push_frame() from any thread.
-    """
-
     def __init__(self, cfg):
         self.cfg     = cfg
-        self._queue  = queue.Queue(maxsize=2)
-        self._win    = None
-        self._label  = None
-        self._glabel = None
-        self._slabel = None
-        self._root   = None
-        self._visible = False
-        self._current_imgtk = None
-
-    # ── called from MAIN thread ───────────────────────────────────────────────
-
-    def attach(self, root):
-        """Create the Toplevel window. Must be called from main tkinter thread."""
-        self._root = root
-        self._build_window()
-        self._tick()   # start pull loop
-
-    def show(self):
-        if self._win:
-            self._visible = True
-            self._win.deiconify()
-            self._win.lift()
-
-    def hide(self):
-        if self._win:
-            self._visible = False
-            self._win.withdraw()
-
-    def toggle(self):
-        if self._visible: self.hide()
-        else:             self.show()
-
-    def close(self):
-        if self._win:
-            self._win.destroy()
-
-    # called for API compatibility from main.py — does nothing (attach() is used)
-    def run(self): pass
-
-    # ── called from PIPELINE thread ───────────────────────────────────────────
+        self.visible = True   # show by default
 
     def push_frame(self, frame, gesture, status):
-        """Non-blocking frame push. Drops frames if display is behind."""
-        try:
-            # Clear old frame and push new one
-            while not self._queue.empty():
-                try: self._queue.get_nowait()
-                except: pass
-            self._queue.put_nowait((frame.copy(), gesture or "idle", status or "lost"))
-        except queue.Full:
-            pass
+        pass  # pipeline.py handles imshow directly
 
-    # ── UI construction ───────────────────────────────────────────────────────
-
-    def _build_window(self):
-        win = tk.Toplevel(self._root)
-        win.title("GestureOS — Camera Preview")
-        win.configure(bg="#0d1117")
-        win.geometry("540x420+30+30")
-        win.resizable(True, True)
-        win.attributes("-topmost", True)
-        win.protocol("WM_DELETE_WINDOW", self.hide)
-        self._win = win
-
-        # Header bar
-        hdr = tk.Frame(win, bg="#161b22", pady=6)
-        hdr.pack(fill="x")
-        tk.Label(hdr, text="📷  Camera Preview",
-                 font=("Segoe UI", 10, "bold"),
-                 bg="#161b22", fg="#00ff88").pack(side="left", padx=12)
-
-        hide_btn = tk.Label(hdr, text="✕ Hide", font=("Segoe UI", 9),
-                            bg="#161b22", fg="#6e7681", cursor="hand2", padx=8)
-        hide_btn.pack(side="right", padx=4)
-        hide_btn.bind("<Button-1>", lambda e: self.hide())
-        hide_btn.bind("<Enter>",    lambda e: hide_btn.config(fg="#ff4444"))
-        hide_btn.bind("<Leave>",    lambda e: hide_btn.config(fg="#6e7681"))
-
-        ontop_var = tk.BooleanVar(value=True)
-        def _toggle_ontop():
-            win.attributes("-topmost", ontop_var.get())
-        tk.Checkbutton(hdr, text="Always on top", variable=ontop_var,
-                       command=_toggle_ontop,
-                       bg="#161b22", fg="#6e7681",
-                       selectcolor="#0d1117",
-                       activebackground="#161b22",
-                       font=("Segoe UI", 9)).pack(side="right", padx=8)
-
-        # Camera feed label — fills all available space
-        self._label = tk.Label(win, bg="#0d1117")
-        self._label.pack(fill="both", expand=True)
-
-        # Bottom status strip
-        bot = tk.Frame(win, bg="#161b22", pady=5)
-        bot.pack(fill="x", side="bottom")
-        self._slabel = tk.Label(bot, text="● Starting...",
-                                font=("Segoe UI", 9),
-                                bg="#161b22", fg="#6e7681")
-        self._slabel.pack(side="left", padx=12)
-        self._glabel = tk.Label(bot, text="",
-                                font=("Segoe UI", 9, "bold"),
-                                bg="#161b22", fg="#00ff88")
-        self._glabel.pack(side="right", padx=12)
-
-        # Start withdrawn if needed
-        win.withdraw()
-
-    # ── frame pull loop (runs in main thread via after()) ─────────────────────
-
-    def _tick(self):
-        if not self._win:
-            return
-        try:
-            frame, gesture, status = self._queue.get_nowait()
-        except queue.Empty:
-            self._root.after(33, self._tick)
-            return
-
-        if self._visible:
-            # Resize frame to fit label
-            lw = self._label.winfo_width()
-            lh = self._label.winfo_height()
-            if lw > 10 and lh > 10:
-                fh, fw = frame.shape[:2]
-                scale  = min(lw/fw, lh/fh)
-                nw, nh = int(fw*scale), int(fh*scale)
-                frame  = cv2.resize(frame, (nw, nh), interpolation=cv2.INTER_LINEAR)
-
-            # BGR → RGB → PIL → ImageTk
-            rgb   = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            img   = Image.fromarray(rgb)
-            imgtk = ImageTk.PhotoImage(image=img)
-            self._label.configure(image=imgtk)
-            self._current_imgtk = imgtk   # prevent GC
-
-            # Update status/gesture labels
-            scol  = {"active":"#00ff88","idle":"#ffcc00","lost":"#ff4444"}.get(status,"#ff4444")
-            slbl  = {"active":"● Tracking","idle":"● Idle","lost":"● No hand"}.get(status,"●")
-            self._slabel.config(text=slbl, fg=scol)
-
-            glbl  = GESTURE_LABEL.get(gesture, "")
-            gcol  = GESTURE_COLOR.get(gesture, "#444444")
-            self._glabel.config(text=glbl, fg=gcol)
-
-        self._root.after(33, self._tick)   # ~30 FPS
+    def show(self):    self.visible = True
+    def hide(self):    self.visible = False
+    def toggle(self):  self.visible = not self.visible
+    def close(self):   self.visible = False
+    def attach(self, root): pass
+    def run(self):     pass

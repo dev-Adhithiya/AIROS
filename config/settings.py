@@ -9,6 +9,7 @@ class Settings:
     FRAME_WIDTH:            int   = 1280
     FRAME_HEIGHT:           int   = 720
     TARGET_FPS:             int   = 30
+    NO_PREVIEW:             bool  = False
 
     # MediaPipe
     MAX_HANDS:              int   = 1
